@@ -67,7 +67,7 @@ class NiceSelect {
     this.bindElementEvents();
   }
 
-  #create(initial=true) {
+  create(initial=true) {
     this.data ? this.processData(this.data) : this.extractData(initial);
     this.el.classList.remove('hidden-select');
     this.renderDropdown();
@@ -78,7 +78,7 @@ class NiceSelect {
     this.bindDropdownEvents();
   }
 
-  #processData(data) {
+  processData(data) {
     this.options = data.map((item) => ({
       data: item,
       attributes: {
@@ -89,7 +89,7 @@ class NiceSelect {
     }));
   }
 
-  #extractData(initial) {
+  extractData(initial) {
     const options = Array.from(this.el.querySelectorAll("option,optgroup"));
     const allOptions = [];
     const selectedOptions = [];
@@ -117,6 +117,8 @@ class NiceSelect {
         };
       }
 
+      itemData.text = this.sanitizeHtml(itemData.text);
+
       const attributes = {
         selected: selected,
         disabled: item.disabled,
@@ -136,7 +138,21 @@ class NiceSelect {
     this.selectedOptions  = selectedOptions;
   }
 
-  #renderDropdown() {
+  sanitizeHtml(html) {
+    // Remove potentially malicious content from the text
+    // while allowing innocuous HTML markup
+    ['script', 'iframe', 'object', 'embed', 'applet'].forEach(tag => {
+      html = html.trim().replace(new RegExp(`<${tag}[^>]*>([\\S\\s]*?)<\/${tag}>`, 'gim'), '').replace(new RegExp(`<\/?\\s*${tag}\\s*>`, 'gim'), '');
+    });
+
+    // remove any event attribute from tags
+    html = html.replace(/ on\w+="[^"]*"/gim, '').replace(/ on\w+='[^']*'/gim, '').replace(/ on\w+=[^ ]*[ \/>]/gim, '');
+
+    return html;
+  }
+
+
+  renderDropdown() {
     const classes = [
       "nice-select",
       attr(this.el, "class") || "",
@@ -336,13 +352,13 @@ class NiceSelect {
     }
   }
 
-  #bindElementEvents(){
+  bindElementEvents(){
     this.el.addEventListener("invalid", () => this._triggerValidationMessage("invalid"));
     window.addEventListener("click", e => this._onClickedOutside(e));
     this.el.addEventListener("change", this.update);
   }
 
-  #bindDropdownEvents() {
+  bindDropdownEvents() {
     this.dropdown.addEventListener("click", (e) => this._onClicked(e));
     this.dropdown.addEventListener("keydown", (e) => this._onKeyPressed(e));
     this.dropdown.addEventListener("focusin", () => triggerFocusIn(this.el));
@@ -427,7 +443,7 @@ class NiceSelect {
   /*
     Syncs the original select element with the dropdown
   */
-  #syncSelectValue() {
+  syncSelectValue() {
     const select    = this.el;
 
     if (this.selectedOptions.length > 0) {
@@ -474,7 +490,7 @@ class NiceSelect {
     select.addEventListener("change", this.update);
   }
 
-  #resetSelectValue() {
+  resetSelectValue() {
     if (this.multiple) {
       const select = this.el;
       this.selectedOptions.forEach((item) => {
@@ -493,7 +509,7 @@ class NiceSelect {
   /*
     Syncs the dropdown with the select
   */
-  #syncDropdown(){
+  syncDropdown(){
     if (this.dropdown) {
       const open = hasClass(this.dropdown, "open");
 
@@ -516,7 +532,7 @@ class NiceSelect {
   /*
     Syncs the selected list with the dropdown
   */
-  #syncSelectionList(){
+  syncSelectionList(){
     if(!this.config.showSelectedItems){
       return;
     }
@@ -637,7 +653,7 @@ class NiceSelect {
     }
   }
 
-  #removeSelectionList(){
+  removeSelectionList(){
     if(this.selectionList != null){
       this.selectionList.remove();
       this.selectionList  = null;
