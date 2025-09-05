@@ -29,6 +29,7 @@ const data              = (el, key) => el.getAttribute("data-" + key);
 const hasClass          = (el, className) => el?.classList.contains(className);
 const addClass          = (el, className) => el?.classList.add(className);
 const removeClass       = (el, className) => el?.classList.remove(className);
+const toggleClass       = (el, className, toggle) => el?.classList.toggle(className, toggle);
 
 const defaultOptions = {
   data: null,
@@ -37,7 +38,8 @@ const defaultOptions = {
   placeholder: "Select an option",
   searchtext: "Search",
   selectedtext: "selected",
-  hideSelect: true
+  hideSelect: true,
+  clearIcon: '<svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor"><path d="m353.83-285.74-68.09-68.09L410.35-480 285.74-605.17l68.09-68.09L480-548.65l125.17-124.61 68.09 68.09L548.65-480l124.61 126.17-68.09 68.09L480-410.35 353.83-285.74Z"/></svg>'
 };
 
 class NiceSelect {
@@ -76,6 +78,9 @@ class NiceSelect {
       this.el.classList.add('hidden-select');
     }
     this.bindDropdownEvents();
+    if ( initial ) {
+      this._call( 'onCreate' );
+    }
   }
 
   processData(data) {
@@ -136,6 +141,7 @@ class NiceSelect {
 
     this.options          = allOptions;
     this.selectedOptions  = selectedOptions;
+    toggleClass(this.dropdown, "has-selection", selectedOptions.length > 0);
   }
 
   sanitizeHtml(html) {
@@ -151,13 +157,13 @@ class NiceSelect {
     return html;
   }
 
-
   renderDropdown() {
     const classes = [
       "nice-select",
       attr(this.el, "class") || "",
       this.disabled ? "disabled" : "",
       this.multiple ? "has-multiple" : "",
+      this.el.selectedIndex >= 0 ? "has-selection" : "",
     ].filter(Boolean);
 
     const searchHtml = this.config.searchable
@@ -175,16 +181,18 @@ class NiceSelect {
           ${searchHtml}
           <ul class="list"></ul>
         </div>
+        <button class="clear-button">
+          ${this.config.clearIcon}
+        </button>
       </div>
     `;
 
     this.el.insertAdjacentHTML("afterend", html);
-
     this.dropdown = this.el.nextElementSibling;
-
     this._renderSelectedItems();
-
     this._renderItems();
+
+    this._call( 'onRenderDropdown' );
   }
 
   /*
@@ -222,6 +230,7 @@ class NiceSelect {
 
       this.dropdown.querySelector(".current").innerHTML = html;
     }
+    toggleClass(this.dropdown, "has-selection", this.selectedOptions.length > 0);
   }
 
   _renderItems() {
@@ -276,20 +285,17 @@ class NiceSelect {
     }
     
     $this.syncDropdown();
+    $this._call( 'onUpdate' );
   }
 
   disable() {
-    if (!this.disabled) {
-      this.disabled = true;
-      addClass(this.dropdown, "disabled");
-    }
+    this.disabled = true;
+    toggleClass(this.dropdown, "disabled", true);
   }
 
   enable() {
-    if (this.disabled) {
-      this.disabled = false;
-      removeClass(this.dropdown, "disabled");
-    }
+    this.disabled = false;
+    toggleClass(this.dropdown, "disabled", false);
   }
 
   clear() {
@@ -297,6 +303,9 @@ class NiceSelect {
     this.selectedOptions = [];
     this._renderSelectedItems();
     this.update();
+    removeClass(this.dropdown, "open");
+    removeClass(this.dropdown, "has-selection");
+    this._call( 'onClear' );
     triggerChange(this.el);
   }
 
@@ -309,22 +318,22 @@ class NiceSelect {
       this.dropdown.remove();
       this.el.classList.remove('hidden-select');
     }
+
+    this._call( 'onDestroy' );
   }
 
   focus(target=''){
     const isOpen = hasClass(this.dropdown, "open");
 
+    toggleClass(this.dropdown, "open", !isOpen);
     if (!isOpen) {
-      addClass(this.dropdown, "open");
       triggerModalOpen(this.el);
     } else {
       if (this.multiple) {
         if (target === this.dropdown.querySelector(".multiple-options")) {
-          removeClass(this.dropdown, "open");
           triggerModalClose(this.el);
         }
       } else {
-        removeClass(this.dropdown, "open");
         triggerModalClose(this.el);
       }
     }
@@ -350,6 +359,8 @@ class NiceSelect {
     } else {
       this.dropdown.focus();
     }
+
+    this._call( 'onFocus' );
   }
 
   bindElementEvents(){
@@ -363,6 +374,10 @@ class NiceSelect {
     this.dropdown.addEventListener("keydown", (e) => this._onKeyPressed(e));
     this.dropdown.addEventListener("focusin", () => triggerFocusIn(this.el));
     this.dropdown.addEventListener("focusout", () => triggerFocusOut(this.el));
+    this.dropdown.querySelector(".clear-button").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.clear();
+    });
 
     if (this.config.searchable) this._bindSearchEvent();
   }
@@ -393,18 +408,12 @@ class NiceSelect {
 
       if (hasClass(optionEl, "selected")) {
         selected  = false;
-
-        removeClass(optionEl, "selected");
-
         // Update Selected Options
         this.selectedOptions = this.selectedOptions.filter(
           (item) => item.data !== option.data
         );
       } else {
         selected  = true;
-
-        addClass(optionEl, "selected");
-
         // Update Selected Options
         this.selectedOptions.push(option);      
       }
@@ -412,7 +421,8 @@ class NiceSelect {
       // Update option 
       option.data.selected        = selected;
       option.attributes.selected  = selected;
-    } else {      
+      toggleClass(optionEl, "selected", selected);
+    } else {
       // Mark all dropdown options as unselected
       this.dropdown.querySelectorAll('li.selected').forEach((li) => removeClass(li, "selected"));
 
@@ -434,17 +444,17 @@ class NiceSelect {
     }
 
     this._renderSelectedItems();
-
     this.syncSelectValue();
-
     this.syncSelectionList();
+    toggleClass(this.dropdown, "has-selection", this.selectedOptions.length > 0);
+    this._call( 'onDropdownItemClicked', optionEl );
   }
 
   /*
     Syncs the original select element with the dropdown
   */
   syncSelectValue() {
-    const select    = this.el;
+    const select = this.el;
 
     if (this.selectedOptions.length > 0) {
       select.value = this.selectedOptions[0].data.value;
@@ -488,6 +498,8 @@ class NiceSelect {
 
     // Add event listener again
     select.addEventListener("change", this.update);
+    toggleClass(this.dropdown, "has-selection", this.selectedOptions.length > 0);
+    this._call( 'onSyncSelectValue' );
   }
 
   resetSelectValue() {
@@ -504,6 +516,8 @@ class NiceSelect {
     }
 
     triggerChange(this.el);
+    removeClass(this.dropdown, "has-selection");
+    this._call( 'onResetSelectValue' );
   }
 
   /*
@@ -527,6 +541,7 @@ class NiceSelect {
     }
 
     attr(this.el, "disabled") ? this.disable() : this.enable();
+    this._call( 'onSyncDropdown' );
   }
 
   /*
@@ -644,13 +659,8 @@ class NiceSelect {
   }
 
   _triggerValidationMessage(type) {
-    if (type === "invalid") {
-      addClass(this.dropdown, "invalid");
-      removeClass(this.dropdown, "valid");
-    } else {
-      addClass(this.dropdown, "valid");
-      removeClass(this.dropdown, "invalid");
-    }
+    toggleClass(this.dropdown, "valid", type !== "invalid");
+    toggleClass(this.dropdown, "invalid", type === "invalid");
   }
 
   removeSelectionList(){
@@ -724,6 +734,13 @@ class NiceSelect {
     // only click when currently selected
     if(el && el.matches('.selected')){
       el.click();
+    }
+  }
+
+  _call(funcName, ...args) {
+    const fn = this.config[funcName];
+    if (typeof fn === "function") {
+      fn.apply(this, [ this.el, this.dropdown, ...args ]);
     }
   }
 }

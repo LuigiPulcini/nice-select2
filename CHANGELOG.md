@@ -10,6 +10,18 @@
 
 ### Updated
 
+## [2.5.0] - 2025-09-05
+
+### Added
+- event callbacks as initialization options
+- clear button inside dropdown input
+
+### Changed
+
+### Fixed
+
+### Updated
+
 ## [2.4.0] - 2025-07-24
 
 ### Added
